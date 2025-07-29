@@ -9,43 +9,45 @@ import { createUserMdl } from '../models/authenticationModel.js'
 
 
 export const LoginAppCtrl = function (req, res) {
-    var data = req.body;
-        loginMdl(data, function (err, results) {
-            try {
-                if (err) {
-                    res.send({ status: 400, message: "Not able to process the request, please try again" });
-                    return;
-                }
-                // console.log(results.length);
-                if (results.length <= 0) {
-                    res.send({ status: 404, message: "Email/Mobile number not exist" });
-                } else if (results.length > 0) {
-                    // console.log(req.body.Password)
-                    const validPass = (
-                        req.body.Password == results[0].password
-                    )
-                   
-                    if (validPass) {
-                      
-                        var SecretKey = process.env.SecretKey
-                      
-                        let payload = {
-                            subject: req.body.userEmail
-                        };
-                        let token = Jwt.sign(payload, SecretKey, { expiresIn: "3h" });
+  const { userEmail, Password } = req.body;
 
-                        res.send({
-                            status: 200, message: "login Successful", results, token: token
-                        });
-                        // }
-                    } else {
-                        res.send({ status: 400, message: "Invalid password" })
-                    }
-                }
-            } catch (err) {
-                res.send({ status: 500, message: "Internal server error" })
-            }
-        });
+  loginMdl({ userEmail, Password }, (err, results) => {
+    if (err) {
+      return res
+        .status(400)
+        .json({ status: 400, message: "Not able to process the request, please try again" });
+    }
+    if (!results.length) {
+      return res
+        .status(404)
+        .json({ status: 404, message: "Email/Mobile number not exist" });
+    }
+
+    const user = results[0];
+    const validPass = Password === user.password;
+    if (!validPass) {
+      return res
+        .status(400)
+        .json({ status: 400, message: "Invalid password" });
+    }
+
+    // Use the numeric user.id as the JWT subject
+    const payload = { subject: user.id };
+    const secretKey = process.env.SecretKey;
+    const token = Jwt.sign(payload, secretKey, { expiresIn: "3h" });
+
+    // Return the token and any needed user data
+    return res.json({
+      status: 200,
+      message: "Login successful",
+      token,
+      user: {
+        id: user.id,
+        userName: user.userName,
+        email: user.email
+      }
+    });
+  });
 };
 
 

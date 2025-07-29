@@ -1,83 +1,156 @@
-// File: controllers/postsController.js
+// File: src/controllers/postsController.js
 
 import {
   createPostMdl,
   getUserPostsMdl,
-  deletePostMdl
+  getPostByIdMdl,
+  updatePostMdl,
+  deletePostMdl,
+  addIngredientsMdl,
+  addStepsMdl,
+  getAllPostsMdl
 } from '../models/postsModel.js';
 
 /**
- * Creates a new post. Expects in req.body:
- *   - userId
- *   - title
- *   - content
- *   - (optional) videoUrl
+ * Creates a new post (with optional ingredients & steps).
  */
 export const createPostCtrl = (req, res) => {
-  const { userId, title, content, videoUrl } = req.body;
-  if (!userId || !title || !content) {
-    return res
-      .status(400)
-      .json({ status:400, message:'userId, title and content are required' });
+  const {
+    userId,
+    title,
+    slug,
+    excerpt,
+    categoryId,
+    cuisineId,
+    prepTime,
+    cookTime,
+    servings,
+    difficulty,
+    nutrition = {},
+    publishDate,
+    featuredImage,
+    videoUrl,
+    metaTitle,
+    metaDescription,
+    ingredients = [],
+    steps = []
+  } = req.body;
+
+  if (!userId || !title || !slug || !excerpt) {
+    return res.status(400).json({
+      status: 400,
+      message: 'userId, title, slug and excerpt are required'
+    });
   }
 
-  createPostMdl({ userId, title, content, videoUrl }, (err, result) => {
+  createPostMdl({
+    userId,
+    title,
+    slug,
+    excerpt,
+    categoryId,
+    cuisineId,
+    prepTime,
+    cookTime,
+    servings,
+    difficulty,
+    nutrition,
+    publishDate,
+    featuredImage,
+    videoUrl,
+    metaTitle,
+    metaDescription
+  }, (err, result) => {
     if (err) {
-      console.error(err);
-      return res
-        .status(500)
-        .json({ status:500, message:'Failed to create post' });
+      console.error('createPostMdl error:', err);
+      return res.status(500).json({ status:500, message:'Failed to create post' });
     }
-    res
-      .status(201)
-      .json({ status:201, message:'Post created', postId: result.insertId });
+    const postId = result.insertId;
+    addIngredientsMdl(postId, ingredients, ingErr => {
+      if (ingErr) console.error('addIngredientsMdl error:', ingErr);
+      addStepsMdl(postId, steps, stepErr => {
+        if (stepErr) console.error('addStepsMdl error:', stepErr);
+        res.status(201).json({ status:201, message:'Post created', postId });
+      });
+    });
   });
 };
 
 /**
  * Fetches all posts for a given user.
- * Expects userId in req.query.userId
  */
 export const getUserPostsCtrl = (req, res) => {
   const userId = req.query.userId;
   if (!userId) {
-    return res
-      .status(400)
-      .json({ status:400, message:'userId query parameter is required' });
+    return res.status(400).json({
+      status: 400,
+      message: 'userId query parameter is required'
+    });
   }
-
   getUserPostsMdl(userId, (err, results) => {
     if (err) {
-      console.error(err);
-      return res
-        .status(500)
-        .json({ status:500, message:'Failed to fetch posts' });
+      console.error('getUserPostsMdl error:', err);
+      return res.status(500).json({ status:500, message:'Failed to fetch posts' });
     }
     res.json({ status:200, results });
   });
 };
 
 /**
+ * Fetches a single post by its ID.
+ */
+export const getPostByIdCtrl = (req, res) => {
+  const postId = req.params.id;
+  getPostByIdMdl(postId, (err, rows) => {
+    if (err) {
+      console.error('getPostByIdMdl error:', err);
+      return res.status(500).json({ status:500, message:'Failed to fetch post' });
+    }
+    if (!rows.length) {
+      return res.status(404).json({ status:404, message:'Post not found' });
+    }
+    res.json({ status:200, result: rows[0] });
+  });
+};
+
+/**
+ * Updates an existing post by its ID.
+ */
+export const updatePostCtrl = (req, res) => {
+  const postId = req.params.id;
+  updatePostMdl(postId, req.body, (err, result) => {
+    if (err) {
+      console.error('updatePostMdl error:', err);
+      return res.status(500).json({ status:500, message:'Failed to update post' });
+    }
+    res.json({ status:200, message:'Post updated' });
+  });
+};
+
+/**
  * Deletes a single post.
- * Expects postId in req.params.id and userId in req.body.userId
  */
 export const deletePostCtrl = (req, res) => {
   const postId = req.params.id;
-  const userId = req.body.userId;
-  if (!userId) {
-    return res
-      .status(400)
-      .json({ status:400, message:'userId is required in request body' });
-  }
-
-  // Optionally, you could verify ownership here by querying the post first
   deletePostMdl(postId, err => {
     if (err) {
-      console.error(err);
-      return res
-        .status(500)
-        .json({ status:500, message:'Failed to delete post' });
+      console.error('deletePostMdl error:', err);
+      return res.status(500).json({ status:500, message:'Failed to delete post' });
     }
     res.json({ status:200, message:'Post deleted' });
   });
 };
+
+export const getAllPostsCtrl = (req, res) => {
+  const lim = parseInt(req.query.limit, 10) || 6;
+  getAllPostsMdl(lim, (err, rows) => {
+    if (err) {
+      console.error('getAllPostsMdl error:', err);
+      return res
+        .status(500)
+        .json({ status: 500, message: 'Failed to fetch posts' });
+    }
+    res.json({ status: 200, results: rows });
+  });
+};
+
